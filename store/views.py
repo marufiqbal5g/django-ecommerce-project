@@ -1,4 +1,7 @@
-from django.shortcuts import render
+from django.shortcuts import render, redirect
+from django.contrib.auth import authenticate, login, logout
+from .forms import RegisterForm
+from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 import json
 import datetime
@@ -6,7 +9,8 @@ from .models import *
 
 def store(request):
 	if request.user.is_authenticated:
-		customer = request.user.customer
+		# customer = request.user.customer
+		customer, created = Customer.objects.get_or_create(user=request.user)
 		order, created = Order.objects.get_or_create(customer=customer, complete=False)
 		items = order.orderitem_set.all()
 		cartItems = order.get_cart_items
@@ -22,7 +26,8 @@ def store(request):
 
 def cart(request):
     if request.user.is_authenticated:
-        customer = request.user.customer
+        # customer = request.user.customer
+        customer, created = Customer.objects.get_or_create(user=request.user)
         order, created = Order.objects.get_or_create(customer=customer, complete=False)
         items = order.orderitem_set.all()
         cartItems = order.get_cart_items
@@ -39,7 +44,8 @@ def cart(request):
 
 def checkout(request):
     if request.user.is_authenticated:
-        customer = request.user.customer
+        # customer = request.user.customer
+        customer, created = Customer.objects.get_or_create(user=request.user)
         order, created = Order.objects.get_or_create(customer=customer, complete=False)
         items = order.orderitem_set.all()
         cartItems = order.get_cart_items
@@ -61,7 +67,8 @@ def updateItem(request):
 	print('Action:', action)
 	print('Product:', productId)
 
-	customer = request.user.customer
+	# customer = request.user.customer
+	customer, created = Customer.objects.get_or_create(user=request.user)
 	product = Product.objects.get(id=productId)
 	order, created = Order.objects.get_or_create(customer=customer, complete=False)
 
@@ -84,7 +91,8 @@ def processOrder(request):
 	data = json.loads(request.body)
 
 	if request.user.is_authenticated:
-		customer = request.user.customer
+		# customer = request.user.customer
+		customer, created = Customer.objects.get_or_create(user=request.user)
 		order, created = Order.objects.get_or_create(customer=customer, complete=False)
 		total = float(data['form']['total'])
 		order.transaction_id = transaction_id
@@ -108,3 +116,40 @@ def processOrder(request):
 
 
 	return JsonResponse('Payment submitted..', safe=False)
+
+def login_view(request):
+    if request.method == 'POST':
+        username = request.POST.get('username')
+        password = request.POST.get('password')
+
+        user = authenticate(request, username=username, password=password)
+
+        if user is not None:
+            login(request, user)
+            return redirect('store')
+        else:
+            return render(request, 'store/login.html', {'error': 'Invalid credentials'})
+
+    return render(request, 'store/login.html')
+
+
+@login_required
+def store_view(request):
+    return render(request, 'store')
+
+
+def logout_view(request):
+    logout(request)
+    return redirect('store')
+
+def register_view(request):
+    if request.method == 'POST':
+        form = RegisterForm(request.POST)
+        if form.is_valid():
+            user = form.save()
+            # login(request, user)   # auto login after register
+            return redirect('store')
+    else:
+        form = RegisterForm()
+
+    return render(request, 'store/register.html', {'form': form})
